@@ -1,13 +1,15 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 import json
-from .models import Organization, InviteCode, UserProfile
+from .models import Organization, InviteCode, UserProfile, Cluster
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import make_password, check_password
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
+from .serializers import ClusterSerializer, ClusterStatusSerializer, DeploymentSerializer
+import requests
 
 
 @csrf_exempt
@@ -104,7 +106,7 @@ def login_user(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+# @permission_classes([IsAuthenticated])
 def generate_invite_code(request):
     if request.method == 'POST':
         # The user profile can be accessed directly from the request user
@@ -128,3 +130,81 @@ def generate_invite_code(request):
         return JsonResponse({'invite_code': invite_code.code, 'organization': organization.name}, status=201)
 
     return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+@api_view(['POST'])
+def create_cluster(request):
+    serializer = ClusterSerializer(data=request.data)
+
+    if serializer.is_valid():
+        # Check if the user and organization exist
+        user_id = request.data.get('user')
+        
+        try:
+            user = UserProfile.objects.get(id=user_id)
+            
+        except UserProfile.DoesNotExist:
+            return JsonResponse({"error": "User not found"}, status=404)
+        except Organization.DoesNotExist:
+            return JsonResponse({"error": "Organization not found"}, status=404)
+
+        # Set the organization and user fields
+        cluster = serializer.save(user=user)
+        return JsonResponse(ClusterSerializer(cluster).data, status=201)
+
+    return JsonResponse(serializer.errors, status=400)
+
+@api_view(['GET'])
+def cluster_status(request, cluster_id):
+    try:
+        # Retrieve the cluster by ID
+        cluster = Cluster.objects.get(id=cluster_id)
+        serializer = ClusterStatusSerializer(cluster)
+        return JsonResponse(serializer.data, status=200)
+    except Cluster.DoesNotExist:
+        return JsonResponse({"error": "Cluster not found"}, status=404)
+
+@api_view(['POST'])
+def schedule_deployment(request):
+    serializer = DeploymentSerializer(data=request.data)
+
+    if serializer.is_valid():
+        # Extract user_id from the validated data
+        user_id = request.data.get('user')
+
+        # Check if the user exists
+        try:
+            user = UserProfile.objects.get(id=user_id)
+        except UserProfile.DoesNotExist:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+        # Save the deployment to the database
+        deployment = serializer.save(user=user)
+        
+        # Prepare data to send to the scheduling server
+        scheduling_data = {
+            "user_id": user_id,
+            "cpu": deployment.cpu_required,
+            "gpu": deployment.gpu_required,
+            "ram": deployment.ram_required,
+            "service_name": request.data.get('service_name'),
+            "docker_image": deployment.docker_image,
+            "priority": deployment.priority,
+            "deployment_id": deployment.id  # Include deployment ID for tracking
+        }
+
+        # Send data to the scheduling server
+        scheduling_server_url = "http://scheduling-server-url/schedule"  # Replace with the actual scheduling server URL
+        try:
+            response = requests.post(scheduling_server_url, json=scheduling_data)
+            if response.status_code == 200:
+                return JsonResponse({"message": "Deployment scheduled successfully", "deployment_id": deployment.id}, status=status.HTTP_201_CREATED)
+            else:
+                return JsonResponse({"error": "Failed to communicate with scheduling server"}, status=502)
+        except requests.exceptions.RequestException as e:
+            return JsonResponse({"error": str(e)}, status=502)
+
+    return JsonResponse(serializer.errors, status=400)
+
+
+

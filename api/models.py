@@ -50,7 +50,6 @@ class UserProfile(models.Model):
 
 class Cluster(models.Model):
     name = models.CharField(max_length=255)
-    organization = models.ForeignKey(Organization, related_name='clusters', on_delete=models.CASCADE)
     user = models.ForeignKey(UserProfile, related_name='user_clusters', on_delete=models.CASCADE)
 
     # Total resources available in the cluster
@@ -63,11 +62,14 @@ class Cluster(models.Model):
     utilized_gpu = models.FloatField(default=0)     # GPUs currently being utilized
     utilized_ram = models.FloatField(default=0)     # RAM currently being utilized
 
+    created_at = models.DateTimeField(default=timezone.now)
+    
     def __str__(self):
         return self.name
 
 
 class Deployment(models.Model):
+    name = models.CharField(max_length=255, default="deployment")
     docker_image = models.CharField(max_length=255)
     ram_required = models.FloatField()
     cpu_required = models.FloatField()
