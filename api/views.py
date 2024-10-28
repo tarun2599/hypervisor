@@ -1,4 +1,5 @@
-from django.shortcuts import render
+from django.db import transaction
+from .models import Deployment
 from django.http import JsonResponse
 import json
 from .models import Organization, InviteCode, UserProfile, Cluster
@@ -28,7 +29,7 @@ def register_user(request):
             username = data.get('username')
             password = data.get('password')
             invite_code = data.get('invite_code')
-            org_name = data.get('org_name')
+            org_name = data.get('org_name') 
 
             # Check if the username already exists
             if UserProfile.objects.filter(username=username).exists():
@@ -44,7 +45,8 @@ def register_user(request):
                         # Create user with developer/viewer role based on invite code
                         role = 'developer' if invite.organization else 'viewer'
                         user_profile = UserProfile.objects.create(
-                            user=UserProfile.objects.create(username=username, password=make_password(password)),  # Hash the password
+                            username=username, 
+                            password=make_password(password),  # Hash the password
                             organization=organization,
                             role=role
                         )
@@ -115,7 +117,7 @@ def generate_invite_code(request):
             return Response({'error': 'You do not have permission to generate invite codes.'}, status=403)
 
         # Extract organization ID from the request data
-        org_id = request.data.get('org_id')
+        org_id = user_profile.organization.id
         if not org_id:
             return Response({'error': 'Organization ID is required.'}, status=400)
 
@@ -167,19 +169,25 @@ def cluster_status(request, cluster_id):
     except Cluster.DoesNotExist:
         return JsonResponse({"error": "Cluster not found"}, status=404)
 
-@api_view(['POST'])
 def schedule_deployment(request):
     serializer = DeploymentSerializer(data=request.data)
 
     if serializer.is_valid():
-        # Extract user_id from the validated data
+        # Extract user_id and cluster_id from the request data
         user_id = request.data.get('user')
+        cluster_id = request.data.get('cluster_id')
 
-        # Check if the user exists
+        if not cluster_id:
+            return JsonResponse({"error": "cluster_id is required"}, status=400)
+
+        # Check if the user and cluster exist
         try:
             user = UserProfile.objects.get(id=user_id)
+            cluster = Cluster.objects.get(id=cluster_id)
         except UserProfile.DoesNotExist:
             return JsonResponse({"error": "User not found"}, status=404)
+        except Cluster.DoesNotExist:
+            return JsonResponse({"error": "Cluster not found"}, status=404)
 
         # Save the deployment to the database
         deployment = serializer.save(user=user)
@@ -193,18 +201,91 @@ def schedule_deployment(request):
             "service_name": request.data.get('service_name'),
             "docker_image": deployment.docker_image,
             "priority": deployment.priority,
-            "deployment_id": deployment.id  # Include deployment ID for tracking
+            "deployment_id": deployment.id,
+            "cluster_id": cluster_id
         }
 
         # Send data to the scheduling server
-        scheduling_server_url = "http://scheduling-server-url/schedule"  # Replace with the actual scheduling server URL
+        scheduling_server_url = "http://localhost:8000/scheduler/schedule"
         try:
             response = requests.post(scheduling_server_url, json=scheduling_data)
             if response.status_code == 200:
-                return JsonResponse({"message": "Deployment scheduled successfully", "deployment_id": deployment.id}, status=status.HTTP_201_CREATED)
+                return JsonResponse({
+                    "message": "Deployment scheduled successfully",
+                    "deployment_id": deployment.id,
+                    "cluster_id": cluster_id
+                }, status=status.HTTP_201_CREATED)
             else:
                 return JsonResponse({"error": "Failed to communicate with scheduling server"}, status=502)
         except requests.exceptions.RequestException as e:
             return JsonResponse({"error": str(e)}, status=502)
 
     return JsonResponse(serializer.errors, status=400)
+
+
+
+@api_view(['POST'])
+def stop_deployment(request, deployment_id):
+    """Stop a deployment and restore cluster resources"""
+    try:
+        # Get deployment
+        deployment = get_object_or_404(Deployment, id=deployment_id)
+        
+        # Check if deployment is actually running
+        if deployment.status != 'running':
+            return JsonResponse({
+                "error": "Deployment is not running"
+            }, status=400)
+
+        # Get associated cluster
+        cluster = deployment.cluster
+        if not cluster:
+            return JsonResponse({
+                "error": "Deployment is not associated with any cluster"
+            }, status=400)
+
+        cluster_id = cluster.id  # Store cluster_id before nullifying the relationship
+
+        # Use transaction to ensure atomicity
+        with transaction.atomic():
+            # Restore cluster resources
+            cluster.utilized_cpu -= deployment.cpu_required
+            cluster.utilized_gpu -= deployment.gpu_required
+            cluster.utilized_ram -= deployment.ram_required
+            
+            # Ensure we don't go below 0 for any resource
+            cluster.utilized_cpu = max(0, cluster.utilized_cpu)
+            cluster.utilized_gpu = max(0, cluster.utilized_gpu)
+            cluster.utilized_ram = max(0, cluster.utilized_ram)
+            
+            cluster.save()
+
+            # Update deployment status
+            deployment.status = 'stopped'
+            deployment.cluster = None  # Remove cluster association
+            deployment.save()
+
+            # Process queue for this cluster since resources were freed
+            scheduling_server_url = "http://localhost:8000/scheduler/schedule"
+            requests.post(scheduling_server_url, json={"cluster_id": cluster_id})
+
+        return JsonResponse({
+            "message": "Deployment stopped successfully",
+            "deployment_id": deployment_id,
+            "cluster_status": {
+                "name": cluster.name,
+                "utilized_cpu": cluster.utilized_cpu,
+                "utilized_gpu": cluster.utilized_gpu,
+                "utilized_ram": cluster.utilized_ram
+            }
+        }, status=200)
+
+    except Deployment.DoesNotExist:
+        return JsonResponse({
+            "error": "Deployment not found"
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            "error": str(e)
+        }, status=500)
+

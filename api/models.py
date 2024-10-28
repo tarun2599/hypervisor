@@ -67,7 +67,6 @@ class Cluster(models.Model):
     def __str__(self):
         return self.name
 
-
 class Deployment(models.Model):
     name = models.CharField(max_length=255, default="deployment")
     docker_image = models.CharField(max_length=255)
@@ -77,8 +76,15 @@ class Deployment(models.Model):
     cluster = models.ForeignKey(Cluster, related_name='deployments', on_delete=models.CASCADE, null=True)
     user = models.ForeignKey(UserProfile, related_name='user_deployments', on_delete=models.CASCADE)
     
-    status = models.CharField(max_length=50, default='queued')
+    STATUS_CHOICES = [
+        ('queued', 'Queued'),
+        ('running', 'Running'),
+        ('stopped', 'Stopped'),
+        ('failed', 'Failed')
+    ]
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='queued')
     priority = models.CharField(max_length=10, choices=[('high', 'High'), ('low', 'Low')])
 
     def __str__(self):
         return f"{self.docker_image} - {self.status} ({self.priority})"
+

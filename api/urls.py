@@ -8,4 +8,5 @@ urlpatterns = [
     path('create_cluster/', create_cluster, name='create_cluster'),
     path('clusters/<int:cluster_id>/', cluster_status, name='cluster-status'),
     path('schedule-deployment/', schedule_deployment, name='schedule_deployment'),
+    path('deployments/<int:deployment_id>/stop/', stop_deployment, name='stop-deployment'),
 ]
