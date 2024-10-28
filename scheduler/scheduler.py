@@ -15,57 +15,28 @@ class DeploymentScheduler:
         )
 
     def process_cluster_queue(self, cluster_id):
-    """Process deployments for a specific cluster - only process low priority when high is empty"""
+        """Process deployments for a specific cluster - only process low priority when high is empty"""
         def process_priority_queue(priority):
-            """Process all deployments in a specific priority queue"""
-            processed_deployments = set()  # Track processed deployments to avoid infinite loop
-            while True:
-                # Get next deployment from the priority queue without removing it yet
-                queue_key = self.queue.get_queue_key(cluster_id, priority)
-                deployment_data_bytes = self.redis_client.lindex(queue_key, -1)  # Peek at next deployment
-                
-                if not deployment_data_bytes:
-                    break  # Queue is empty
-                    
-                deployment_data = json.loads(deployment_data_bytes)
-                deployment_id = deployment_data['deployment_id']
-                
-                if deployment_id in processed_deployments:
-                    # We've seen this deployment before, stop processing
-                    break
-                    
-                processed_deployments.add(deployment_id)
-                
+            queue_key = self.queue.get_queue_key(cluster_id, priority)
+            deployment_data = self.queue.get_next_deployment(cluster_id)
+            
+            if deployment_data:
                 try:
-                    deployment = Deployment.objects.get(id=deployment_id)
                     cluster = Cluster.objects.get(id=cluster_id)
-
+                    deployment = Deployment.objects.get(id=deployment_data['deployment_id'])
+                    
                     if self.can_deploy(cluster, deployment):
-                        # Only now remove it from queue since we can deploy it
-                        self.redis_client.rpop(queue_key)
+                        # Update deployment status and cluster resources
+                        deployment.status = 'running'
+                        deployment.save()
                         
-                        with transaction.atomic():
-                            # Update cluster resource utilization
-                            cluster.utilized_cpu += deployment.cpu_required
-                            cluster.utilized_gpu += deployment.gpu_required
-                            cluster.utilized_ram += deployment.ram_required
-                            cluster.save()
-
-                            # Update deployment status
-                            deployment.status = 'running'
-                            deployment.cluster = cluster
-                            deployment.save()
-                    else:
-                        # Can't deploy now, leave it in queue and try next
-                        continue
-
-                except (Deployment.DoesNotExist, Cluster.DoesNotExist):
-                    # Remove invalid deployments from queue
-                    self.redis_client.rpop(queue_key)
-                    continue
-                except Exception as e:
-                    print(f"Error processing deployment {deployment_id}: {str(e)}")
-                    continue
+                        cluster.utilized_cpu += deployment.cpu_required
+                        cluster.utilized_gpu += deployment.gpu_required
+                        cluster.utilized_ram += deployment.ram_required
+                        cluster.save()
+                        
+                except (Cluster.DoesNotExist, Deployment.DoesNotExist):
+                    pass
 
         # First check if high priority queue has any deployments
         high_queue_key = self.queue.get_queue_key(cluster_id, 'high')

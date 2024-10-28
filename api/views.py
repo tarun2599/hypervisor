@@ -169,6 +169,7 @@ def cluster_status(request, cluster_id):
     except Cluster.DoesNotExist:
         return JsonResponse({"error": "Cluster not found"}, status=404)
 
+@api_view(['POST'])
 def schedule_deployment(request):
     serializer = DeploymentSerializer(data=request.data)
 

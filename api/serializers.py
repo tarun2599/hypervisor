@@ -26,4 +26,4 @@ class ClusterStatusSerializer(serializers.ModelSerializer):
 class DeploymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Deployment
-        fields = ['name', 'user', 'cpu_required', 'gpu_required', 'ram_required', 'docker_image', 'priority']
+        fields = ['name', 'user', 'cpu_required', 'gpu_required', 'ram_required', 'docker_image', 'priority', 'cluster_id']
