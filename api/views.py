@@ -4,13 +4,14 @@ import json
 from .models import Organization, InviteCode, UserProfile, Cluster
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import make_password, check_password
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from .serializers import ClusterSerializer, ClusterStatusSerializer, DeploymentSerializer
 import requests
-
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.models import User
 
 @csrf_exempt
 def register_user(request):
@@ -75,51 +76,48 @@ def register_user(request):
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
-@csrf_exempt
-def login_user(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            if not isinstance(data, dict):
-                return JsonResponse({'error': 'Invalid data format'}, status=400)
-
-            username = data.get('username')
-            password = data.get('password')
-
-            user_profile = UserProfile.objects.filter(username=username).first()
-            if user_profile and check_password(password, user_profile.password):  # Check hashed password
-                refresh = RefreshToken.for_user(user_profile)  # Generate JWT tokens
-                return JsonResponse({
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                    'message': 'User logged in successfully.'
-                })
-            else:
-                return JsonResponse({'error': 'Invalid Credentials'}, status=401)
-
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
-
-    return JsonResponse({'error': 'Invalid request method'}, status=405)
-
-
 @api_view(['POST'])
-# @permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
+def login_user(request):
+    try:
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        if not username or not password:
+            return Response({'error': 'Username and password are required'}, status=400)
+
+        user_profile = UserProfile.objects.filter(username=username).first()
+        if user_profile and check_password(password, user_profile.password):
+            # Create a Django User instance for JWT
+            django_user = User.objects.get_or_create(username=username)[0]
+            refresh = RefreshToken.for_user(django_user)
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'message': 'User logged in successfully.'
+            })
+        else:
+            return Response({'error': 'Invalid Credentials'}, status=401)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+        
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def generate_invite_code(request):
-    if request.method == 'POST':
-        # The user profile can be accessed directly from the request user
-        user_profile = request.user
+    try:
+        # Get UserProfile from Django User
+        user_profile = UserProfile.objects.get(username=request.user)
 
         # Ensure the user is an admin
         if user_profile.role != 'admin':
-            return JsonResponse({'error': 'You do not have permission to generate invite codes.'}, status=403)
+            return Response({'error': 'You do not have permission to generate invite codes.'}, status=403)
 
-        # Extract organization ID from the request body
+        # Extract organization ID from the request data
         org_id = request.data.get('org_id')
         if not org_id:
-            return JsonResponse({'error': 'Organization ID is required.'}, status=400)
+            return Response({'error': 'Organization ID is required.'}, status=400)
 
         # Get the organization
         organization = get_object_or_404(Organization, id=org_id)
@@ -127,9 +125,14 @@ def generate_invite_code(request):
         # Create a new invite code
         invite_code = InviteCode.objects.create(organization=organization)
 
-        return JsonResponse({'invite_code': invite_code.code, 'organization': organization.name}, status=201)
-
-    return JsonResponse({'error': 'Invalid request method'}, status=405)
+        return Response({
+            'invite_code': invite_code.code, 
+            'organization': organization.name
+        }, status=201) 
+    except UserProfile.DoesNotExist:
+        return Response({'error': 'User profile not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
 @api_view(['POST'])
@@ -205,6 +208,3 @@ def schedule_deployment(request):
             return JsonResponse({"error": str(e)}, status=502)
 
     return JsonResponse(serializer.errors, status=400)
-
-
-
