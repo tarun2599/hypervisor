@@ -24,10 +24,11 @@ def schedule(request):
             
         try:
             cluster = Cluster.objects.get(id=cluster_id)
-            deployment = Deployment.objects.get(id=deployment_data['deployment_id'])
+            if(deployment_data['is_scheduled']):
+                
+                # Add to specified cluster's queue and process it
+                queue.enqueue_deployment(deployment_data, cluster_id)
             
-            # Add to specified cluster's queue and process it
-            queue.enqueue_deployment(deployment_data, cluster_id)
             scheduler.process_cluster_queue(cluster_id)
             
             return Response({
@@ -46,6 +47,7 @@ def schedule(request):
             }, status=status.HTTP_404_NOT_FOUND)
             
     except Exception as e:
+        print(str(e))
         return Response({
             "error": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

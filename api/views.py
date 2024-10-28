@@ -203,7 +203,8 @@ def schedule_deployment(request):
             "docker_image": deployment.docker_image,
             "priority": deployment.priority,
             "deployment_id": deployment.id,
-            "cluster_id": cluster_id
+            "cluster_id": cluster_id,
+            "is_scheduled": True
         }
 
         # Send data to the scheduling server
@@ -263,12 +264,14 @@ def stop_deployment(request, deployment_id):
 
             # Update deployment status
             deployment.status = 'stopped'
-            deployment.cluster = None  # Remove cluster association
             deployment.save()
-
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": request.headers.get("Authorization")
+            }
             # Process queue for this cluster since resources were freed
-            scheduling_server_url = "http://localhost:8000/scheduler/schedule"
-            requests.post(scheduling_server_url, json={"cluster_id": cluster_id})
+            scheduling_server_url = "http://localhost:8000/scheduler/schedule/"
+            requests.post(scheduling_server_url, json={"cluster_id": cluster_id, "is_scheduled": False}, headers=headers)
 
         return JsonResponse({
             "message": "Deployment stopped successfully",

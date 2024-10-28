@@ -70,7 +70,7 @@ class DeploymentScheduler:
 
         # First check if high priority queue has any deployments
         queue_length = self.queue.get_queue_length(cluster_id)
-        print('ayahaa', queue_length['high_priority'])
+        print(queue_length)
         # Process high priority queue
         process_priority_queue('high')
 
