@@ -21,10 +21,10 @@ class DeploymentScheduler:
             """Process all deployments in a specific priority queue"""
             processed_deployments = set()  # Track processed deployments to avoid infinite loop
             while True:
-                # Get next deployment from the priority queue without removing it yet
+                # Get next deployment from the priority queue 
                 queue_key = self.queue.get_queue_key(cluster_id, priority)
-                deployment_data_bytes = self.queue.redis_client.lindex(queue_key, -1)  # Peek at next deployment
-
+                deployment_data_bytes = self.queue.redis_client.lindex(queue_key, -1)  # Peek at last deployment 
+                
                 if not deployment_data_bytes:
                     break  # Queue is empty
                    
@@ -34,7 +34,8 @@ class DeploymentScheduler:
                 if deployment_id in processed_deployments:
                     # We've seen this deployment before, stop processing
                     break
-                   
+                
+                self.queue.redis_client.rpop(queue_key)  
                 processed_deployments.add(deployment_id)
                
                 try:
@@ -43,21 +44,23 @@ class DeploymentScheduler:
 
                     if self.can_deploy(cluster, deployment):
                         # Only now remove it from queue since we can deploy it
-                        self.queue.redis_client.rpop(queue_key)
+                        # self.queue.redis_client.rpop(queue_key)
                        
-                        with transaction.atomic():
+                        
                             # Update cluster resource utilization
-                            cluster.utilized_cpu += deployment.cpu_required
-                            cluster.utilized_gpu += deployment.gpu_required
-                            cluster.utilized_ram += deployment.ram_required
-                            cluster.save()
+                        cluster.utilized_cpu += deployment.cpu_required
+                        cluster.utilized_gpu += deployment.gpu_required
+                        cluster.utilized_ram += deployment.ram_required
+                        cluster.save()
 
-                            # Update deployment status
-                            deployment.status = 'running'
-                            deployment.cluster = cluster
-                            deployment.save()
+                        # Update deployment status
+                        deployment.status = 'running'
+                        deployment.cluster = cluster
+                        deployment.save()
                     else:
                         # Can't deploy now, leave it in queue and try next
+                        self.queue.enqueue_deployment(deployment_data, cluster_id)
+                       
                         continue
 
                 except (Deployment.DoesNotExist, Cluster.DoesNotExist):

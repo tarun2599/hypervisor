@@ -1,5 +1,27 @@
 from rest_framework import serializers
-from .models import Cluster, Deployment
+from .models import Cluster, Deployment, UserProfile, InviteCode, Organization
+
+class RegisterUserSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=30)
+    password = serializers.CharField(write_only=True)
+    org_name = serializers.CharField(max_length=255, required=False)
+    invite_code = serializers.CharField(max_length=255, required=False)
+
+    def validate(self, data):
+        if not data.get('org_name') and not data.get('invite_code'):
+            raise serializers.ValidationError("Either 'org_name' or 'invite_code' must be provided.")
+        return data
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=30)
+    password = serializers.CharField(write_only=True)
+
+class InviteCodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InviteCode
+        fields = ['code', 'organization', 'created_at', 'expires_at', 'is_active']
+
+
 
 class ClusterSerializer(serializers.ModelSerializer):
     class Meta:

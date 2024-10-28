@@ -14,83 +14,77 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.contrib.auth.hashers import make_password, check_password
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.shortcuts import get_object_or_404
+from .models import UserProfile, Organization, InviteCode
+from .serializers import RegisterUserSerializer, LoginSerializer, InviteCodeSerializer
+from rest_framework.decorators import authentication_classes
+
+
 @csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])  # No authentication required
+@permission_classes([AllowAny])
 def register_user(request):
-    if request.method == 'POST':
+    serializer = RegisterUserSerializer(data=request.data)
+    if serializer.is_valid():
+        username = serializer.validated_data['username']
+        password = serializer.validated_data['password']
+        org_name = serializer.validated_data.get('org_name')
+        invite_code = serializer.validated_data.get('invite_code')
+
         try:
-            # Load JSON data from request body
-            data = json.loads(request.body)
-
-            # Ensure data is a dictionary
-            if not isinstance(data, dict):
-                return JsonResponse({'error': 'Invalid data format'}, status=400)
-
-            # Extract parameters from the data
-            username = data.get('username')
-            password = data.get('password')
-            invite_code = data.get('invite_code')
-            org_name = data.get('org_name') 
-
-            # Check if the username already exists
-            if UserProfile.objects.filter(username=username).exists():
-                return JsonResponse({'error': 'Username already exists'}, status=400)
-
-            # Check if invite code is provided
-            if invite_code:
-                try:
-                    invite = InviteCode.objects.get(code=invite_code)
-                    if invite.is_valid():
-                        organization = invite.organization
-
-                        # Create user with developer/viewer role based on invite code
-                        role = 'developer' if invite.organization else 'viewer'
-                        user_profile = UserProfile.objects.create(
-                            username=username, 
-                            password=make_password(password),  # Hash the password
-                            organization=organization,
-                            role=role
-                        )
-                        return JsonResponse({'message': 'User registered successfully with invite code'}, status=201)
-                    else:
-                        return JsonResponse({'error': 'Invite code has expired'}, status=400)
-                except InviteCode.DoesNotExist:
-                    return JsonResponse({'error': 'Invalid invite code'}, status=400)
-
-            # If no invite code, create new organization
-            elif org_name:
+            # Handle organization creation or retrieval
+            if org_name:
                 organization = Organization.objects.create(name=org_name)
-                user_profile = UserProfile.objects.create(
-                    username=username,
-                    password=make_password(password),  # Hash the password
-                    organization=organization,
-                    role='admin'  # Admin role for the user
-                )
-                return JsonResponse({'message': 'User registered successfully as admin of new organization'}, status=201)
+            else:
+                # Validate invite code
+                invite = InviteCode.objects.get(code=invite_code, is_active=True)
+                if not invite.is_valid():
+                    return JsonResponse({'error': 'Invite code is invalid or expired.'}, status=400)
+                organization = invite.organization
 
-            return JsonResponse({'error': 'No valid input provided'}, status=400)
+            # Save user with hashed password
+            user_profile = UserProfile.objects.create(
+                username=username,
+                password=make_password(password),
+                organization=organization
+            )
 
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+            # If using invite code, deactivate it
+            if invite_code:
+                invite.is_active = False
+                invite.save()
+            
+            response_data = {
+                'username': user_profile.username,
+                'organization': user_profile.organization.name if user_profile.organization else None,
+                'role': user_profile.role,
+                'joined_at': user_profile.joined_at
+            }
+            
+            return JsonResponse(response_data , status=201)
+        except InviteCode.DoesNotExist:
+            return JsonResponse({'error': 'Invite code not found.'}, status=404)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
-
-    return JsonResponse({'error': 'Invalid request method'}, status=405)
-
-from rest_framework_simplejwt.tokens import RefreshToken
+    return Response(serializer.errors, status=400)
 
 @api_view(['POST'])
+@authentication_classes([])  # No authentication required
 @permission_classes([AllowAny])
 def login_user(request):
-    try:
-        username = request.data.get('username')
-        password = request.data.get('password')
-
-        if not username or not password:
-            return Response({'error': 'Username and password are required'}, status=400)
+    serializer = LoginSerializer(data=request.data)
+    if serializer.is_valid():
+        username = serializer.validated_data['username']
+        password = serializer.validated_data['password']
 
         user_profile = UserProfile.objects.filter(username=username).first()
         if user_profile and check_password(password, user_profile.password):
-            # Create a Django User instance for JWT
             django_user = User.objects.get_or_create(username=username)[0]
             refresh = RefreshToken.for_user(django_user)
             return Response({
@@ -100,37 +94,25 @@ def login_user(request):
             })
         else:
             return Response({'error': 'Invalid Credentials'}, status=401)
+    return Response(serializer.errors, status=400)
 
-    except Exception as e:
-        return Response({'error': str(e)}, status=500)
-
-        
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
 def generate_invite_code(request):
     try:
-        # Get UserProfile from Django User
         user_profile = UserProfile.objects.get(username=request.user)
 
-        # Ensure the user is an admin
         if user_profile.role != 'admin':
             return Response({'error': 'You do not have permission to generate invite codes.'}, status=403)
 
-        # Extract organization ID from the request data
         org_id = user_profile.organization.id
         if not org_id:
             return Response({'error': 'Organization ID is required.'}, status=400)
 
-        # Get the organization
         organization = get_object_or_404(Organization, id=org_id)
-
-        # Create a new invite code
         invite_code = InviteCode.objects.create(organization=organization)
 
-        return Response({
-            'invite_code': invite_code.code, 
-            'organization': organization.name
-        }, status=201) 
+        serializer = InviteCodeSerializer(invite_code)
+        return Response(serializer.data, status=201)
     except UserProfile.DoesNotExist:
         return Response({'error': 'User profile not found'}, status=404)
     except Exception as e:
@@ -177,6 +159,9 @@ def schedule_deployment(request):
         # Extract user_id and cluster_id from the request data
         user_id = request.data.get('user')
         cluster_id = request.data.get('cluster')
+        cpu_required = request.data.get('cpu_required')
+        gpu_required = request.data.get('gpu_required')
+        ram_required = request.data.get('ram_required')
 
         if not cluster_id:
             return JsonResponse({"error": "cluster_id is required"}, status=400)
@@ -191,6 +176,12 @@ def schedule_deployment(request):
             return JsonResponse({"error": "Cluster not found"}, status=404)
 
         # Save the deployment to the database
+        
+        cluster = Cluster.objects.get(id=cluster_id)
+        
+        if(cluster.total_cpu < cpu_required or cluster.total_gpu < gpu_required or cluster.total_ram < ram_required):
+            return JsonResponse({"error": "cannot make this deployment on given cluster. deployment requiements exceeds cluster specifications"}, status=404)
+        
         deployment = serializer.save(user=user, cluster=cluster)
         
         # Prepare data to send to the scheduling server
@@ -249,29 +240,29 @@ def stop_deployment(request, deployment_id):
         cluster_id = cluster.id  # Store cluster_id before nullifying the relationship
 
         # Use transaction to ensure atomicity
-        with transaction.atomic():
+        # with transaction.atomic():
             # Restore cluster resources
-            cluster.utilized_cpu -= deployment.cpu_required
-            cluster.utilized_gpu -= deployment.gpu_required
-            cluster.utilized_ram -= deployment.ram_required
-            
-            # Ensure we don't go below 0 for any resource
-            cluster.utilized_cpu = max(0, cluster.utilized_cpu)
-            cluster.utilized_gpu = max(0, cluster.utilized_gpu)
-            cluster.utilized_ram = max(0, cluster.utilized_ram)
-            
-            cluster.save()
+        cluster.utilized_cpu -= deployment.cpu_required
+        cluster.utilized_gpu -= deployment.gpu_required
+        cluster.utilized_ram -= deployment.ram_required
+        
+        # Ensure we don't go below 0 for any resource
+        cluster.utilized_cpu = max(0, cluster.utilized_cpu)
+        cluster.utilized_gpu = max(0, cluster.utilized_gpu)
+        cluster.utilized_ram = max(0, cluster.utilized_ram)
+        
+        cluster.save()
 
-            # Update deployment status
-            deployment.status = 'stopped'
-            deployment.save()
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": request.headers.get("Authorization")
-            }
-            # Process queue for this cluster since resources were freed
-            scheduling_server_url = "http://localhost:8000/scheduler/schedule/"
-            requests.post(scheduling_server_url, json={"cluster_id": cluster_id, "is_scheduled": False}, headers=headers)
+        # Update deployment status
+        deployment.status = 'stopped'
+        deployment.save()
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": request.headers.get("Authorization")
+        }
+        # Process queue for this cluster since resources were freed
+        scheduling_server_url = "http://localhost:8000/scheduler/schedule/"
+        requests.post(scheduling_server_url, json={"cluster_id": cluster_id, "is_scheduled": False}, headers=headers)
 
         return JsonResponse({
             "message": "Deployment stopped successfully",
