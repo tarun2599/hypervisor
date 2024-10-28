@@ -7,21 +7,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import make_password, check_password
 from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
-from .serializers import ClusterSerializer, ClusterStatusSerializer, DeploymentSerializer
+from .serializers import RegisterUserSerializer, LoginSerializer, InviteCodeSerializer, ClusterSerializer, ClusterStatusSerializer, DeploymentSerializer
 import requests
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
-
-
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from django.contrib.auth.hashers import make_password, check_password
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.shortcuts import get_object_or_404
-from .models import UserProfile, Organization, InviteCode
-from .serializers import RegisterUserSerializer, LoginSerializer, InviteCodeSerializer
 from rest_framework.decorators import authentication_classes
 
 
@@ -125,7 +116,7 @@ def create_cluster(request):
 
     if serializer.is_valid():
         # Check if the user and organization exist
-        user_id = request.data.get('user')
+        user_id = request.user.id
         
         try:
             user = UserProfile.objects.get(id=user_id)
@@ -157,7 +148,7 @@ def schedule_deployment(request):
 
     if serializer.is_valid():
         # Extract user_id and cluster_id from the request data
-        user_id = request.data.get('user')
+        user_id = request.user.id
         cluster_id = request.data.get('cluster')
         cpu_required = request.data.get('cpu_required')
         gpu_required = request.data.get('gpu_required')
@@ -199,9 +190,12 @@ def schedule_deployment(request):
         }
 
         # Send data to the scheduling server
+        headers = {
+            "Content-Type": "application/json"
+        }
         scheduling_server_url = "http://localhost:8000/scheduler/schedule/"
         try:
-            response = requests.post(scheduling_server_url, json=scheduling_data, headers=request.headers)
+            response = requests.post(scheduling_server_url, json=scheduling_data, headers=headers)
             if response.status_code == 200:
                 return JsonResponse({
                     "message": "Deployment scheduled successfully",
@@ -257,8 +251,7 @@ def stop_deployment(request, deployment_id):
         deployment.status = 'stopped'
         deployment.save()
         headers = {
-            "Content-Type": "application/json",
-            "Authorization": request.headers.get("Authorization")
+            "Content-Type": "application/json"
         }
         # Process queue for this cluster since resources were freed
         scheduling_server_url = "http://localhost:8000/scheduler/schedule/"

@@ -1,16 +1,20 @@
 from django.shortcuts import render
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from .scheduler import DeploymentScheduler
 from .queue_handler import queue_instance
 from api.models import Cluster, Deployment
+from rest_framework.decorators import authentication_classes
+from rest_framework.permissions import AllowAny
 
 scheduler = DeploymentScheduler()
 queue = queue_instance
 
 
 @api_view(['POST'])
+@authentication_classes([])  # No authentication required
+@permission_classes([AllowAny])
 def schedule(request):
     """Endpoint to receive deployment requests"""
     try:
@@ -55,6 +59,8 @@ def schedule(request):
 
 
 @api_view(['GET'])
+@authentication_classes([])  # No authentication required
+@permission_classes([AllowAny])
 def queue_status(request):
     """Get current queue status for all clusters"""
     try:
@@ -75,6 +81,8 @@ def queue_status(request):
         )
 
 @api_view(['GET'])
+@authentication_classes([])  # No authentication required
+@permission_classes([AllowAny])
 def cluster_queue_status(request, cluster_id):
     """Get queue status for specific cluster"""
     try:
