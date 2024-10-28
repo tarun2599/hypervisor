@@ -5,7 +5,22 @@ from api.models import Cluster, Deployment
 
 class RedisQueue:
     def __init__(self):
-        self.redis_client = redis.Redis(host='localhost', port=6379, db=0)
+        try:
+            self.redis_client = redis.Redis(
+                host='localhost', 
+                port=6379, 
+                db=0,
+                decode_responses=True  # Add this for proper string handling
+            )
+            # Test connection
+            self.redis_client.ping()
+            print("Successfully connected to Redis")
+        except redis.ConnectionError as e:
+            print(f"Failed to connect to Redis: {e}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error while connecting to Redis: {e}")
+            raise
 
     def get_queue_key(self, cluster_id, priority):
         """Generate queue key for specific cluster and priority"""
@@ -13,9 +28,24 @@ class RedisQueue:
 
     def enqueue_deployment(self, deployment_data, cluster_id):
         """Add deployment to appropriate cluster's priority queue"""
-        priority = deployment_data['priority']
-        queue_key = self.get_queue_key(cluster_id, priority)
-        self.redis_client.lpush(queue_key, json.dumps(deployment_data))
+        try:
+            priority = deployment_data['priority']
+            queue_key = self.get_queue_key(cluster_id, priority)
+            
+            # Debug prints
+            print(f"Attempting to push to queue: {queue_key}")
+            print(f"Data being pushed: {deployment_data}")
+            
+            result = self.redis_client.lpush(queue_key, json.dumps(deployment_data))
+            print(f"Push result: {result}")
+            
+            return result
+        except redis.ConnectionError as e:
+            print(f"Redis connection error: {e}")
+            raise
+        except Exception as e:
+            print(f"Error pushing to queue: {e}")
+            raise
 
     def get_next_deployment(self, cluster_id):
         """Get next deployment for specific cluster prioritizing high priority queue"""
@@ -39,3 +69,5 @@ class RedisQueue:
             'high_priority': self.redis_client.llen(high_queue_key),
             'low_priority': self.redis_client.llen(low_queue_key)
         }
+
+queue_instance = RedisQueue()

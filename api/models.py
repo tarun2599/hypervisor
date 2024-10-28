@@ -74,7 +74,7 @@ class Deployment(models.Model):
     cpu_required = models.FloatField()
     gpu_required = models.FloatField()
     cluster = models.ForeignKey(Cluster, related_name='deployments', on_delete=models.CASCADE, null=True)
-    user = models.ForeignKey(UserProfile, related_name='user_deployments', on_delete=models.CASCADE),
+    user = models.ForeignKey(UserProfile, related_name='user_deployments', on_delete=models.CASCADE)
     
     STATUS_CHOICES = [
         ('queued', 'Queued'),

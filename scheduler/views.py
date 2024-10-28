@@ -3,11 +3,11 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from .scheduler import DeploymentScheduler
-from .queue_handler import RedisQueue
+from .queue_handler import queue_instance
 from api.models import Cluster, Deployment
 
 scheduler = DeploymentScheduler()
-queue = RedisQueue()
+queue = queue_instance
 
 
 @api_view(['POST'])

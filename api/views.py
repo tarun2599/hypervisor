@@ -176,7 +176,7 @@ def schedule_deployment(request):
     if serializer.is_valid():
         # Extract user_id and cluster_id from the request data
         user_id = request.data.get('user')
-        cluster_id = request.data.get('cluster_id')
+        cluster_id = request.data.get('cluster')
 
         if not cluster_id:
             return JsonResponse({"error": "cluster_id is required"}, status=400)
@@ -191,7 +191,7 @@ def schedule_deployment(request):
             return JsonResponse({"error": "Cluster not found"}, status=404)
 
         # Save the deployment to the database
-        deployment = serializer.save(user=user)
+        deployment = serializer.save(user=user, cluster=cluster)
         
         # Prepare data to send to the scheduling server
         scheduling_data = {
@@ -207,15 +207,15 @@ def schedule_deployment(request):
         }
 
         # Send data to the scheduling server
-        scheduling_server_url = "http://localhost:8000/scheduler/schedule"
+        scheduling_server_url = "http://localhost:8000/scheduler/schedule/"
         try:
-            response = requests.post(scheduling_server_url, json=scheduling_data)
+            response = requests.post(scheduling_server_url, json=scheduling_data, headers=request.headers)
             if response.status_code == 200:
                 return JsonResponse({
                     "message": "Deployment scheduled successfully",
                     "deployment_id": deployment.id,
                     "cluster_id": cluster_id
-                }, status=status.HTTP_201_CREATED)
+                }, status=201)
             else:
                 return JsonResponse({"error": "Failed to communicate with scheduling server"}, status=502)
         except requests.exceptions.RequestException as e:
