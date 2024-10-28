@@ -1,5 +1,5 @@
 from django.test import TestCase
-from .models import UserProfile, Organization, Cluster
+from api.models import UserProfile, Organization, Cluster
 
 class UserProfileTestCase(TestCase):
     def setUp(self):
