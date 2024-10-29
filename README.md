@@ -55,7 +55,15 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
     ```
   &emsp; &emsp; &ensp; You can access the application by opening your browser and going to [http://localhost:8000](http://localhost:8000).
 
-6. **Algorithm**\
+6.  **User Authentication**\
+    After registering, you must log in to obtain an access token. This token is returned in the response upon a successful login. For any subsequent requests that require authorization, include this token in the request header as:\
+    Authorization: Bearer <access-token>
+
+
+7.  **View API Documentation**\
+    You can explore and test the API endpoints through the Swagger documentation available at /swagger/ (or the equivalent path configured in the project).
+
+8. **Algorithm**\
   The core algorithm of your MLOps platform revolves around the deployment scheduling process, which utilizes priority queues managed by Redis. Here's a more detailed explanation:\
   *Deployment Scheduling Algorithm*
     1. Priority Queues:
@@ -82,7 +90,7 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
     6. Fallback to Low Priority:
         - If the high priority queue is empty, the scheduler will process the low priority queue, ensuring that all queued deployments are eventually addressed.
 
-7. **Architecture**\
+9. **Architecture**\
   The architecture of your MLOps platform is designed to support scalable and efficient management of machine learning deployments. Here's a detailed breakdown:
   *Components*
     1. API Service:
@@ -99,12 +107,12 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
         - Functionality: Stores deployment data in priority queues, allowing the scheduler to efficiently process requests.
         <!-- end of the list -->
     This architecture supports scalability by allowing multiple clusters to be managed independently, with Redis providing fast access to deployment queues. The separation of API and Scheduler services ensures that user interactions and deployment processing can be scaled independently, providing flexibility and efficiency.
-8. **Database Schema**\
+10. **Database Schema**\
   The database schema consists of the following models:
     - **UserProfile**: Stores user information and roles.
     - **Organization**: Represents organizations in the system.
     - **Cluster**: Contains cluster details and resource information.
     - **Deployment**: Tracks deployment details and status.
 
-9. **Additional Notes**
+11. **Additional Notes**
     - Ensure Redis is installed and running before starting the Scheduler Service.

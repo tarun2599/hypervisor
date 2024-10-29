@@ -27,15 +27,17 @@ class ClusterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cluster
         fields = ['name', 'total_cpu', 'total_gpu', 'total_ram']
-
+        
 class ClusterStatusSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source='user.username')  # Get the username of the creator
 
     class Meta:
         model = Cluster
         fields = [
+            'id',            # Add this if you need the cluster ID
             'name',
-            'created_at',  # Make sure you have a created_at field in your Cluster model
+            'user',
+            'created_at',
             'total_cpu',
             'total_gpu',
             'total_ram',
@@ -43,8 +45,9 @@ class ClusterStatusSerializer(serializers.ModelSerializer):
             'utilized_gpu',
             'utilized_ram'
         ]
+
         
 class DeploymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Deployment
-        fields = ['name', 'cpu_required', 'gpu_required', 'ram_required', 'docker_image', 'priority', 'cluster']
+        fields = ['name', 'cpu_required', 'gpu_required', 'ram_required', 'docker_image', 'priority', 'cluster', 'status']

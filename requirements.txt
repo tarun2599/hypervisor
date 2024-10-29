@@ -29,3 +29,7 @@ typing-extensions>=4.0.0
 
 # For environment variables (recommended for settings management)
 python-dotenv>=0.19.0
+
+# API Documentation
+drf-yasg>=1.21.0
+

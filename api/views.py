@@ -40,11 +40,15 @@ def register_user(request):
                 organization = invite.organization
 
             # Save user with hashed password
+            
             user_profile = UserProfile.objects.create(
                 username=username,
                 password=make_password(password),
                 organization=organization
             )
+            
+            # also create a django user just to authenticate
+            django_user = User.objects.create(id=user_profile.id, username=username)
 
             # If using invite code, deactivate it
             if invite_code:
@@ -76,7 +80,7 @@ def login_user(request):
 
         user_profile = UserProfile.objects.filter(username=username).first()
         if user_profile and check_password(password, user_profile.password):
-            django_user = User.objects.get_or_create(username=username)[0]
+            django_user = User.objects.get(username=username)
             refresh = RefreshToken.for_user(django_user)
             return Response({
                 'refresh': str(refresh),
@@ -137,10 +141,21 @@ def cluster_status(request, cluster_id):
     try:
         # Retrieve the cluster by ID
         cluster = Cluster.objects.get(id=cluster_id)
-        serializer = ClusterStatusSerializer(cluster)
-        return JsonResponse(serializer.data, status=200)
+        user_id = request.user.id
+        # Check if user has access to this cluster
+        user_profile = UserProfile.objects.get(id=user_id)
+        if cluster.user != user_profile and cluster.user.organization != user_profile.organization:
+            return Response({"error": "You don't have permission to view this cluster"}, status=403)
+        
+        serializer = ClusterStatusSerializer(cluster)  # Remove cluster= from here
+        return Response(serializer.data, status=200)  # Use Response instead of JsonResponse
+        
     except Cluster.DoesNotExist:
-        return JsonResponse({"error": "Cluster not found"}, status=404)
+        return Response({"error": "Cluster not found"}, status=404)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "User profile not found"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
 
 @api_view(['POST'])
 def schedule_deployment(request):
@@ -161,6 +176,11 @@ def schedule_deployment(request):
         try:
             user = UserProfile.objects.get(id=user_id)
             cluster = Cluster.objects.get(id=cluster_id)
+            if cluster.user.id != user_id:
+                return JsonResponse({
+                    "error": "You don't have permission to schedule deployments on this cluster"
+                }, status=403)
+
         except UserProfile.DoesNotExist:
             return JsonResponse({"error": "User not found"}, status=404)
         except Cluster.DoesNotExist:
@@ -218,6 +238,11 @@ def stop_deployment(request, deployment_id):
         # Get deployment
         deployment = get_object_or_404(Deployment, id=deployment_id)
         
+        user_id = request.user.id
+        if deployment.cluster.user.id != user_id:
+            return JsonResponse({
+                "error": "You don't have permission to stop deployments on this cluster"
+            }, status=403)
         # Check if deployment is actually running
         if deployment.status != 'running':
             return JsonResponse({
@@ -277,3 +302,78 @@ def stop_deployment(request, deployment_id):
             "error": str(e)
         }, status=500)
 
+
+@api_view(['GET'])
+def user_clusters(request):
+    """Fetch all clusters belonging to the authenticated user"""
+    try:
+        user_id = request.user.id
+        user = UserProfile.objects.get(id=user_id)
+        clusters = Cluster.objects.filter(user=user)
+        serializer = ClusterStatusSerializer(clusters, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+
+def organization_clusters(request):
+    """Fetch all clusters in the user's organization"""
+    try:
+        user_id = request.user.id
+        user_profile = UserProfile.objects.get(id=user_id)
+        organization = user_profile.organization
+        if not organization:
+            return Response({"error": "User is not associated with any organization"}, status=400)
+            
+        # Get all users in the organization
+        org_users = UserProfile.objects.filter(organization=organization)
+        # Get all clusters belonging to these users
+        clusters = Cluster.objects.filter(user__in=org_users)
+        
+        serializer = ClusterSerializer(clusters, many=True)
+        return Response(serializer.data)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "User profile not found"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+
+def get_deployment(request, deployment_id):
+    """Fetch a specific deployment by ID"""
+    try:
+        
+        deployment = get_object_or_404(Deployment, id=deployment_id)
+        # Check if user has access to this deployment
+        user_id = request.user.id
+        user_profile = UserProfile.objects.get(id=user_id)
+        if deployment.user != user_profile and deployment.cluster.user.organization != user_profile.organization:
+            return Response({"error": "You don't have permission to view this deployment"}, status=403)
+            
+        serializer = DeploymentSerializer(deployment)
+        return Response(serializer.data)
+    except Deployment.DoesNotExist:
+        return Response({"error": "Deployment not found"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+
+def cluster_deployments(request, cluster_id):
+    """Fetch all deployments in a specific cluster"""
+    try:
+        cluster = get_object_or_404(Cluster, id=cluster_id)
+        # Check if user has access to this cluster
+        user_id = request.user.id
+        user_profile = UserProfile.objects.get(id=user_id)
+        if cluster.user != user_profile and cluster.user.organization != user_profile.organization:
+            return Response({"error": "You don't have permission to view deployments in this cluster"}, status=403)
+            
+        deployments = Deployment.objects.filter(cluster=cluster)
+        serializer = DeploymentSerializer(deployments, many=True)
+        return Response(serializer.data)
+    except Cluster.DoesNotExist:
+        return Response({"error": "Cluster not found"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
