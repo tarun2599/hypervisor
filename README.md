@@ -57,7 +57,9 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 
 6.  **User Authentication**\
     After registering, you must log in to obtain an access token. This token is returned in the response upon a successful login. For any subsequent requests that require authorization, include this token in the request header as:\
+    ```bash
     Authorization: Bearer <access-token>
+    ```
 
 
 7.  **View API Documentation**\
