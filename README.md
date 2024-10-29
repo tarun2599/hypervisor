@@ -1,4 +1,4 @@
-# MLOps Platform
+# Hypervisor
 
 ## Overview
 
@@ -17,17 +17,21 @@ This project is an MLOps platform designed to manage and deploy machine learning
 ### Prerequisites
 
 - Python 3.8 or higher
-- Redis server
-- Django and related packages (see `requirements.txt`)
+- Working Redis server on port 6379
+
 
 ### Installation
 
-1. **Clone the repository:**
+1. **Clone the repository and Create a Virtual Environment:**
    ```bash
-   git clone <repository-url>
-   cd mlops_platform
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   git clone https://github.com/tarun2599/hypervisor
+   cd hypervisor
+   python -m venv venv
+   # on linux
+   source venv/bin/activate
+   # On Windows use
+   `venv\Scripts\activate`
+   ```
 
 2. **Install Dependencies**\
   Install all project dependencies from the `requirements.txt` file:
