@@ -61,7 +61,6 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
     Authorization: Bearer <access-token>
     ```
 
-
 7.  **View API Documentation**\
 
     You can explore and test the API endpoints through the **Swagger documentation** available at [`/swagger/`](http://localhost:8000/swagger/) (or the equivalent path configured in the project).
