@@ -24,7 +24,7 @@ This project is an MLOps platform designed to manage and deploy machine learning
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/tarun2599/hypervisor
    cd mlops_platform
 python -m venv venv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
