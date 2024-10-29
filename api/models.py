@@ -41,7 +41,7 @@ class UserProfile(models.Model):
         ('admin', 'Admin'),
         ('developer', 'Developer'),
     ]
-    role = models.CharField(max_length=255, choices=ROLE_CHOICES, default='viewer')
+    role = models.CharField(max_length=255, choices=ROLE_CHOICES, default='admin')
     joined_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
