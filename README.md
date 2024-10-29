@@ -26,8 +26,12 @@ This project is an MLOps platform designed to manage and deploy machine learning
    ```bash
    git clone https://github.com/tarun2599/hypervisor
    cd hypervisor
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   python -m venv venv
+   # on linux
+   source venv/bin/activate
+   # On Windows use
+   `venv\Scripts\activate`
+   ```
 
 2. **Install Dependencies**\
   Install all project dependencies from the `requirements.txt` file:
