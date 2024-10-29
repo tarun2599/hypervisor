@@ -56,14 +56,18 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
   &emsp; &emsp; &ensp; You can access the application by opening your browser and going to [http://localhost:8000](http://localhost:8000).
 
 6.  **User Authentication**\
-    After registering, you must log in to obtain an access token. This token is returned in the response upon a successful login. For any subsequent requests that require authorization, include this token in the request header as:\
+    After registering, you must log in to obtain an access token. This token is returned in the response upon a successful login. For any subsequent requests that require authorization, include this token in the request header as:
     ```bash
     Authorization: Bearer <access-token>
     ```
 
 
-7.  **View API Documentation**\
-    You can explore and test the API endpoints through the Swagger documentation available at /swagger/ (or the equivalent path configured in the project).
+7.  ** View API Documentation **\
+
+    You can explore and test the API endpoints through the **Swagger documentation** available at [`/swagger/`](http://localhost:8000/swagger/) (or the equivalent path configured in the project).
+
+    This provides an interactive interface where you can review the available API endpoints, their request and response formats, and try out requests directly.
+
 
 8. **Algorithm**\
   The core algorithm of your MLOps platform revolves around the deployment scheduling process, which utilizes priority queues managed by Redis. Here's a more detailed explanation:\
