@@ -125,3 +125,8 @@ This project is an MLOps platform designed to manage and deploy machine learning
 
 11. **Additional Notes**
     - Ensure Redis is installed and running before starting the Scheduler Service.
+
+12. **UML Diagram**
+![#djangoProject](https://github.com/user-attachments/assets/386c2e1c-ccd8-4199-af74-bf3eec99deb3)
+
+
