@@ -17,8 +17,8 @@ This project is an MLOps platform designed to manage and deploy machine learning
 ### Prerequisites
 
 - Python 3.8 or higher
-- Redis server
-- Django and related packages (see `requirements.txt`)
+- Working Redis server on port 6379
+
 
 ### Installation
 
