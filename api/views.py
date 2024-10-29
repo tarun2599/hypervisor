@@ -14,6 +14,34 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from rest_framework.decorators import authentication_classes
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
+
+# 1. Authentication Endpoints
+@swagger_auto_schema(
+    method='post',
+    request_body=RegisterUserSerializer,
+    responses={
+        201: openapi.Response(
+            description="User registered successfully",
+            examples={
+                "application/json": {
+                    "username": "user123",
+                    "organization": "org_name",
+                    "role": "developer",
+                    "joined_at": "2024-01-01T00:00:00Z"
+                }
+            }
+        ),
+        400: "Invalid data",
+        404: "Invite code not found",
+        500: "Server error"
+    },
+    operation_description="Register a new user with organization name or invite code",
+    tags=['1. Authentication'],
+    operation_id='1_1_register'
+)
 
 
 @csrf_exempt
@@ -69,6 +97,29 @@ def register_user(request):
             return JsonResponse({'error': str(e)}, status=500)
     return Response(serializer.errors, status=400)
 
+# Login User
+@swagger_auto_schema(
+    method='post',
+    request_body=LoginSerializer,
+    responses={
+        200: openapi.Response(
+            description="Login successful",
+            examples={
+                "application/json": {
+                    "refresh": "refresh_token",
+                    "access": "access_token",
+                    "message": "User logged in successfully."
+                }
+            }
+        ),
+        401: "Invalid credentials",
+        400: "Invalid data"
+    },
+    operation_description="Login and get access tokens",
+    tags=['1. Authentication'],
+    operation_id='1_2_login'
+)
+
 @api_view(['POST'])
 @authentication_classes([])  # No authentication required
 @permission_classes([AllowAny])
@@ -91,7 +142,22 @@ def login_user(request):
             return Response({'error': 'Invalid Credentials'}, status=401)
     return Response(serializer.errors, status=400)
 
+# Generate Invite Code
+@swagger_auto_schema(
+    method='post',
+    responses={
+        201: InviteCodeSerializer,
+        403: "Permission denied",
+        404: "User profile not found",
+        400: "Organization ID required"
+    },
+    operation_description="Generate invite code for organization (Admin only)",
+    tags=['2. Organization Management'],
+    operation_id='2_1_invite'
+)
+
 @api_view(['POST'])
+
 def generate_invite_code(request):
     try:
         user_profile = UserProfile.objects.get(username=request.user)
@@ -114,7 +180,22 @@ def generate_invite_code(request):
         return Response({'error': str(e)}, status=500)
 
 
+# Create Cluster
+@swagger_auto_schema(
+    method='post',
+    request_body=ClusterSerializer,
+    responses={
+        201: ClusterSerializer,
+        400: "Invalid data",
+        404: "User not found"
+    },
+    operation_description="Create a new cluster",
+    tags=['3. Cluster Management'],
+    operation_id='3_1_create_cluster'
+)
+
 @api_view(['POST'])
+
 def create_cluster(request):
     serializer = ClusterSerializer(data=request.data)
 
@@ -136,7 +217,21 @@ def create_cluster(request):
 
     return JsonResponse(serializer.errors, status=400)
 
+# Cluster Status
+@swagger_auto_schema(
+    method='get',
+    responses={
+        200: ClusterStatusSerializer,
+        404: "Cluster not found",
+        403: "Permission denied"
+    },
+    operation_description="Get status of a specific cluster",
+    tags=['3. Cluster Management'],
+    operation_id='3_2_cluster_status'
+)
+
 @api_view(['GET'])
+
 def cluster_status(request, cluster_id):
     try:
         # Retrieve the cluster by ID
@@ -157,7 +252,32 @@ def cluster_status(request, cluster_id):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
+# Schedule Deployment
+@swagger_auto_schema(
+    method='post',
+    request_body=DeploymentSerializer,
+    responses={
+        200: openapi.Response(
+            description="Deployment scheduled successfully",
+            examples={
+                "application/json": {
+                    "message": "Deployment queued successfully",
+                    "deployment_id": "id",
+                    "cluster_id": "cluster_id"
+                }
+            }
+        ),
+        400: "Invalid data",
+        403: "Permission denied",
+        404: "Cluster/Deployment not found"
+    },
+    operation_description="Schedule a new deployment",
+    tags=['4. Deployment Management'],
+    operation_id='4_1_deployment'
+)
+
 @api_view(['POST'])
+
 def schedule_deployment(request):
     serializer = DeploymentSerializer(data=request.data)
 
@@ -231,7 +351,30 @@ def schedule_deployment(request):
 
 
 
+# Stop Deployment
+@swagger_auto_schema(
+    method='post',
+    responses={
+        200: openapi.Response(
+            description="Deployment stopped successfully",
+            examples={
+                "application/json": {
+                    "message": "Deployment stopped successfully",
+                    "deployment_id": "id"
+                }
+            }
+        ),
+        400: "Deployment not in running state",
+        403: "Permission denied",
+        404: "Deployment not found"
+    },
+    operation_description="Stop a running deployment",
+    tags=['4. Deployment Management'],
+    operation_id='4_2_stop_deployment'
+)
+
 @api_view(['POST'])
+
 def stop_deployment(request, deployment_id):
     """Stop a deployment and restore cluster resources"""
     try:
@@ -302,8 +445,20 @@ def stop_deployment(request, deployment_id):
             "error": str(e)
         }, status=500)
 
+# User Clusters
+@swagger_auto_schema(
+    method='get',
+    responses={
+        200: ClusterSerializer(many=True),
+        500: "Server error"
+    },
+    operation_description="Get all clusters belonging to the authenticated user",
+    tags=['3. Cluster Management'],
+    operation_id='3_3_user_clusters'
+)
 
 @api_view(['GET'])
+
 def user_clusters(request):
     """Fetch all clusters belonging to the authenticated user"""
     try:
@@ -314,6 +469,22 @@ def user_clusters(request):
         return Response(serializer.data)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+
+
+
+
+# Organization Clusters
+@swagger_auto_schema(
+    method='get',
+    responses={
+        200: ClusterSerializer(many=True),
+        400: "User not in organization",
+        404: "User profile not found"
+    },
+    operation_description="Get all clusters in the user's organization",
+    tags=['3. Cluster Management'],
+    operation_id='3_5__org_clusters'
+)
 
 @api_view(['GET'])
 
@@ -338,6 +509,19 @@ def organization_clusters(request):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
+# Get Deployment
+@swagger_auto_schema(
+    method='get',
+    responses={
+        200: DeploymentSerializer,
+        403: "Permission denied",
+        404: "Deployment not found"
+    },
+    operation_description="Get details of a specific deployment",
+    tags=['4. Deployment Management'],
+    operation_id='4_3_fetch_deployments'
+)
+
 @api_view(['GET'])
 
 def get_deployment(request, deployment_id):
@@ -357,6 +541,19 @@ def get_deployment(request, deployment_id):
         return Response({"error": "Deployment not found"}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+
+
+@swagger_auto_schema(
+    method='get',
+    responses={
+        200: DeploymentSerializer(many=True),
+        403: "Permission denied",
+        404: "Cluster not found"
+    },
+    operation_description="Get all deployments in a specific cluster",
+    tags=['4. Deployment Management'],
+    operation_id='4_4_fetch_cluster_deployments'
+)
 
 @api_view(['GET'])
 
