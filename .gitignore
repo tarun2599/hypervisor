@@ -9,8 +9,9 @@ __pycache__/
 *.pot
 *.pyc
 __pycache__/
-db.sqlite3
-db.sqlite3-journal
+# Excluded SQLite database files
+# db.sqlite3
+# db.sqlite3-journal
 */migrations/*
 
 # Environment files
@@ -29,6 +30,8 @@ celerybeat-schedule
 celerybeat.pid
 *.celery
 celery_results/
+# Excluded Redis dump file
+dump.rdb
 
 # Static and media files
 staticfiles/
