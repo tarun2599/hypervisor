@@ -22,7 +22,7 @@ This project is an MLOps platform designed to manage and deploy machine learning
 
 ### Installation
 
-1. **Clone the repository:**
+1. **Clone the repository and Create a Virtual Environment:**
    ```bash
    git clone https://github.com/tarun2599/hypervisor
    cd hypervisor
